@@ -25,10 +25,11 @@ llm = ChatGroq(
 def search_google_images(query):
     """
     Search for images using Google Custom Search API.
+    Returns a list of image URLs (up to 2).
     """
     if not GOOGLE_API_KEY or not GOOGLE_CSE_ID:
         print("Google API Key or CSE ID not set.")
-        return None
+        return []
 
     url = "https://www.googleapis.com/customsearch/v1"
     params = {
@@ -36,17 +37,20 @@ def search_google_images(query):
         "cx": GOOGLE_CSE_ID,
         "key": GOOGLE_API_KEY,
         "searchType": "image",
-        "num": 1
+        "num": 2
     }
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
-        if "items" in data and len(data["items"]) > 0:
-            return data["items"][0]["link"]
+        image_urls = []
+        if "items" in data:
+            for item in data["items"]:
+                image_urls.append(item["link"])
+        return image_urls
     except Exception as e:
         print(f"Error searching images: {e}")
-    return None
+    return []
 
 @app.route("/")
 def index():
@@ -83,19 +87,19 @@ def chat():
         ai_response = llm.invoke(messages)
         ai_response_content = ai_response.content
         
-        image_url = None
+        image_urls = []
         match = re.search(r"\[IMAGE:\s*(.*?)\]", ai_response_content, re.IGNORECASE)
         
         clean_response = ai_response_content
         if match:
             query = match.group(1)
             print(f"Detected image request for: {query}")
-            image_url = search_google_images(query)
+            image_urls = search_google_images(query)
             clean_response = ai_response_content.replace(match.group(0), "").strip()
 
         return jsonify({
             "response": clean_response,
-            "image_url": image_url,
+            "image_urls": image_urls,
             "assistant_message": {"role": "assistant", "content": ai_response_content}
         })
 
